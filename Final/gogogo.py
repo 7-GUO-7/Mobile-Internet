@@ -1,0 +1,1 @@
+print("wang ge wu di le")
