@@ -9,7 +9,7 @@ import PIL.Image as Image
 
 INPUT_DIR = '../input/'
 OUTPUT_DIR = '../output/'
-TEST_SIZE = 0.2
+TEST_SIZE = 0.3
 
 # convert the first W*H pages of pdf to one image,
 # which has H rows and W pages in each row
