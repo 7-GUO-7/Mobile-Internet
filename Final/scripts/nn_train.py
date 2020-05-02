@@ -24,7 +24,7 @@ BATCH_SIZE = 32
 
 class MyDataset(Dataset):
     def __init__(self, is_train=True, transform=None):
-        folder = INPUT_DIR + ('train/' if is_train else 'test/')
+        folder = INPUT_DIR + ('AAAI_train/' if is_train else 'AAAI_test/')
 
         path = []
         label = []
@@ -177,12 +177,14 @@ if __name__ == '__main__':
         adjust_learning_rate(optimizer, epoch)
         train_loss, train_acc, train_pred, train_true = train(train_loader, model, criterion, optimizer)
         test_loss, test_acc, test_pred, test_true = test(test_loader, model, criterion)
-        is_best = test_acc > best_acc
+        # is_best = test_acc > best_acc
+        is_best = 1
+        print("test_acc: " ,test_acc)
         best_acc = max(test_acc, best_acc)
 
         print(round(train_loss, 5), round(train_acc, 5), round(test_loss, 5), round(test_acc, 5), round(best_acc, 5))
-        print(classification_report(train_true, train_pred))
-        print(classification_report(test_true, test_pred))
+        # print(classification_report(train_true, train_pred))
+        # print(classification_report(test_true, test_pred))
 
         if not is_best:
             print('early stop.')

@@ -18,7 +18,7 @@ from lgb_process import get_pdf_meta
 
 INPUT_DIR = '../input/'
 OUTPUT_DIR = '../output/'
-NET_WEIGHT = 0.5
+NET_WEIGHT = 1
 
 
 def get_nn_model():
@@ -26,7 +26,10 @@ def get_nn_model():
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, 2)
     ckp_path = OUTPUT_DIR + 'nn_output/model_best.pth.tar'
+
+    # checkpoint = torch.load(ckp_path, map_location='cpu')
     checkpoint = torch.load(ckp_path)
+
     d = checkpoint['state_dict']
     d = {k.replace('module.', ''): v for k, v in d.items()}
     model.load_state_dict(d)
@@ -49,20 +52,22 @@ def load_img(path):
     return img
 
 
-def predict(pdf_path):
+def predict(pdf_path, img_path):
     # lgb predict
     figures, tables, formulas, cnt = get_pdf_meta(pdf_path)
     meta = figures + tables + formulas + [cnt]
     gbm_score = lgb_model.predict(np.array([meta]))[0]
 
-    # nn predict
-    tmp_dir = INPUT_DIR + 'temp/'
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-    tgt_path = tmp_dir + 'image.jpg'
-    print(tgt_path)
-    save_jpg(pdf_path, tgt_path, tmp_dir)
-    img = load_img(tgt_path)
+    # # nn predict
+    # tmp_dir = INPUT_DIR + 'temp/'
+    # if not os.path.exists(tmp_dir):
+    #     os.makedirs(tmp_dir)
+    # tgt_path = tmp_dir + 'image.jpg'
+    # print(tgt_path)
+    # save_jpg(pdf_path, tgt_path, tmp_dir)
+    # img = load_img(tgt_path)
+    # print(img)
+    img = load_img(img_path)
     logit = nn_model(img)
     probs = F.softmax(logit, dim=1).data.squeeze()
     nn_score = probs[1].numpy()
@@ -82,10 +87,44 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    pdf_path = args.pdf_path
-
-    nn_model = get_nn_model()
     lgb_model = get_lgb_model()
-    score = predict(pdf_path)
-    print('The score of (%s) is %.1f' % (pdf_path, score))
+    nn_model = get_nn_model()
+    count = 0
+    right = 0
+    for name in ['conference', 'arxiv']:
+
+        if name == 'conference':
+            continue
+            pdf_path = INPUT_DIR + 'Val/%s' % name +'-pdf/' # test data for jpg (LGB)
+            img_path = INPUT_DIR + 'Val/%s' % name +'-jpg/' # test data for jpg (LGB)
+            for name in os.listdir(pdf_path):
+                count+=1
+                test_pdf_path = pdf_path+name
+                test_jpg_path = img_path+name[:-3]+'jpg'
+
+                score = predict(test_pdf_path, test_jpg_path)
+                if score>50:
+                    right+=1
+                print('Acc: ', right/count)
+                print('The score of (%s) and (%s) is %.1f' % (test_pdf_path, test_jpg_path, score))
+
+                
+
+        if name == 'arxiv':
+            pdf_path = INPUT_DIR + 'Val/%s' % name +'-pdf/' # test data for jpg (LGB)
+            img_path = INPUT_DIR + 'Val/%s' % name +'-jpg/' # test data for jpg (LGB)
+            for name in os.listdir(pdf_path):
+                count+=1
+                test_pdf_path = pdf_path+name
+                test_jpg_path = img_path+name[:-3]+'jpg'
+
+                score = predict(test_pdf_path, test_jpg_path)
+                if score<50:
+                    right+=1
+                print("right: ",right)
+                print("count: ",count)
+                print('Acc: ', right/count)
+                print('The score of (%s) and (%s) is %.1f' % (test_pdf_path, test_jpg_path, score))
+
+    print('Acc: ', right/count)
+

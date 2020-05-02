@@ -127,5 +127,5 @@ if __name__ == '__main__':
         for pdf in os.listdir(conf_fold):
             lst.append(conf_fold + pdf)
 
-        ret = Pool(20).map(func, lst)
+        ret = Pool(100).map(func, lst)
         json.dump(ret, open(lgb_output + '%s.json' % name, 'w', encoding='utf-8'), ensure_ascii=False)
