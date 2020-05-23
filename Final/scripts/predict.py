@@ -20,12 +20,16 @@ INPUT_DIR = '../input/'
 OUTPUT_DIR = '../output/'
 NET_WEIGHT = 1
 
+ckp_dir = OUTPUT_DIR + 'nn_output/'
+filename = 'final-resnet.pth'
+filepath = os.path.join(ckp_dir, filename)
+
 
 def get_nn_model():
-    model = models.resnet18(pretrained=False)
+    model = models.resnet18(pretrained=True)
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, 2)
-    ckp_path = OUTPUT_DIR + 'nn_output/model_best.pth.tar'
+    ckp_path = OUTPUT_DIR + 'nn_output/model_best-test.pth.tar'
 
     # checkpoint = torch.load(ckp_path, map_location='cpu')
     checkpoint = torch.load(ckp_path)
@@ -33,6 +37,7 @@ def get_nn_model():
     d = checkpoint['state_dict']
     d = {k.replace('module.', ''): v for k, v in d.items()}
     model.load_state_dict(d)
+    model.eval()
     return model
 
 
@@ -53,26 +58,27 @@ def load_img(path):
 
 
 def predict(pdf_path, img_path):
+    lgb_model = get_lgb_model()
+    nn_model = get_nn_model()
     # lgb predict
-    figures, tables, formulas, cnt = get_pdf_meta(pdf_path)
-    meta = figures + tables + formulas + [cnt]
-    gbm_score = lgb_model.predict(np.array([meta]))[0]
+    # figures, tables, formulas, cnt = get_pdf_meta(pdf_path)
+    # meta = figures + tables + formulas + [cnt]
+    # gbm_score = lgb_model.predict(np.array([meta]))[0]
 
     # # nn predict
-    # tmp_dir = INPUT_DIR + 'temp/'
-    # if not os.path.exists(tmp_dir):
-    #     os.makedirs(tmp_dir)
-    # tgt_path = tmp_dir + 'image.jpg'
-    # print(tgt_path)
-    # save_jpg(pdf_path, tgt_path, tmp_dir)
-    # img = load_img(tgt_path)
-    # print(img)
+    nn_model = torch.load(filepath)
+    nn_model.eval()
     img = load_img(img_path)
     logit = nn_model(img)
+    print(logit)
     probs = F.softmax(logit, dim=1).data.squeeze()
-    nn_score = probs[1].numpy()
-
-    score = NET_WEIGHT * nn_score + (1 - NET_WEIGHT) * gbm_score
+    label_predict = np.argmax(probs.cpu().numpy())
+    print(label_predict)
+    print(probs)
+    nn_score = probs[1].cpu().numpy()
+    print(nn_score)
+    score = NET_WEIGHT * nn_score
+    # score = NET_WEIGHT * nn_score + (1 - NET_WEIGHT) * gbm_score
     return round(score*100, 1)
 
 
@@ -87,14 +93,13 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    lgb_model = get_lgb_model()
-    nn_model = get_nn_model()
+
     count = 0
     right = 0
     for name in ['conference', 'arxiv']:
-
+        
         if name == 'conference':
-            continue
+            # continue
             pdf_path = INPUT_DIR + 'Val/%s' % name +'-pdf/' # test data for jpg (LGB)
             img_path = INPUT_DIR + 'Val/%s' % name +'-jpg/' # test data for jpg (LGB)
             for name in os.listdir(pdf_path):
@@ -103,8 +108,11 @@ if __name__ == '__main__':
                 test_jpg_path = img_path+name[:-3]+'jpg'
 
                 score = predict(test_pdf_path, test_jpg_path)
+                print('score:',score)
                 if score>50:
                     right+=1
+                print("right: ",right)
+                print("count: ",count)
                 print('Acc: ', right/count)
                 print('The score of (%s) and (%s) is %.1f' % (test_pdf_path, test_jpg_path, score))
 
@@ -119,6 +127,7 @@ if __name__ == '__main__':
                 test_jpg_path = img_path+name[:-3]+'jpg'
 
                 score = predict(test_pdf_path, test_jpg_path)
+                print(score)
                 if score<50:
                     right+=1
                 print("right: ",right)

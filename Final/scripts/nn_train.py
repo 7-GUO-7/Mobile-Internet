@@ -29,7 +29,7 @@ class MyDataset(Dataset):
         path = []
         label = []
         for conf, lab in zip(['conference/', 'arxiv/'], [1, 0]):
-            # print(conf, lab)
+            print(conf, lab)
             for p in os.listdir(folder + conf):
                 path.append(folder + conf + p)
                 label.append(lab)
@@ -67,7 +67,7 @@ def load_data(batch_size):
                 transforms.ToTensor(),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ])),
-        batch_size=batch_size, shuffle=False)
+        batch_size=batch_size, shuffle=True)
     return train_loader, test_loader
 
 
@@ -91,8 +91,12 @@ def train(trainloader, model, criterion, optimizer):
         optimizer.step()
 
         probs = outputs.detach().cpu().numpy()
+        print('train')
+        # print('probs:', probs)
         pred = np.argmax(probs, axis=1)
         ytrue = targets.cpu().numpy()
+        print("ytrue:",ytrue)
+        print("pred:",pred)
         for i in pred: 
             l_pred.append(i)
         for i in ytrue: 
@@ -123,8 +127,13 @@ def test(testloader, model, criterion):
         loss = criterion(outputs, targets)
 
         probs = outputs.detach().cpu().numpy()
+        print('test')
+        print('probs:', probs)
         pred = np.argmax(probs, axis=1)
         ytrue = targets.cpu().numpy()
+
+        print("ytrue:",ytrue)
+        print("pred:",pred)
         for i in pred: 
             l_pred.append(i)
         for i in ytrue: 
@@ -138,9 +147,10 @@ def test(testloader, model, criterion):
     return loss_sum, true_cnt / all_cnt, l_pred.ravel(), l_true.ravel()
 
 
-def save_checkpoint(state, is_best, checkpoint='checkpoint', filename='checkpoint.pth.tar',
-                    bestname='model_best.pth.tar'):
+def save_checkpoint(state, is_best, checkpoint='checkpoint', filename='checkpoint-final.pth.tar',
+                    bestname='model_best-final.pth.tar'):
     filepath = os.path.join(checkpoint, filename)
+    # print(filepath)
     torch.save(state, filepath)
     if is_best:
         shutil.copyfile(filepath, os.path.join(checkpoint, bestname))
@@ -162,17 +172,21 @@ if __name__ == '__main__':
 
     state = {'lr': 0.001}
 
-    model = models.resnet18(pretrained=False)
+    model = models.resnet18(pretrained=True)
+    for parma in model.parameters():
+        parma.requires_grad = False
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, 2)
 
-    model = torch.nn.DataParallel(model, device_ids=[0]).cuda()
+    
     train_loader, test_loader = load_data(BATCH_SIZE)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=state['lr'], momentum=0.9, weight_decay=1e-4)
+    # optimizer = optim.SGD(model.parameters(), lr=state['lr'], momentum=0.9, weight_decay=1e-4)
+    optimizer = optim.SGD(model.fc.parameters(), lr=state['lr'], momentum=0.9, weight_decay=1e-4)
+    model = torch.nn.DataParallel(model, device_ids=[0,1]).cuda()
 
     best_acc = 0  # best test accuracy
-    for epoch in range(10):
+    for epoch in range(50):
         print('-'*50, 'epoch ', epoch)
         adjust_learning_rate(optimizer, epoch)
         train_loss, train_acc, train_pred, train_true = train(train_loader, model, criterion, optimizer)
@@ -185,19 +199,27 @@ if __name__ == '__main__':
         print(round(train_loss, 5), round(train_acc, 5), round(test_loss, 5), round(test_acc, 5), round(best_acc, 5))
         # print(classification_report(train_true, train_pred))
         # print(classification_report(test_true, test_pred))
+        for i in range(10):
+            print() 
+        filename = 'final-resnet.pth'
+        filepath = os.path.join(ckp_dir, filename)
 
         if not is_best:
             print('early stop.')
             break
+        # else:
+        #     save_checkpoint({
+        #         'epoch': epoch,
+        #         'state_dict': model.state_dict(),
+        #         'acc': test_acc,
+        #         'best_acc': best_acc,
+        #         'optimizer': optimizer.state_dict(),
+        #         'lr': state['lr']
+        #     }, is_best, checkpoint=ckp_dir)
         else:
-            save_checkpoint({
-                'epoch': epoch,
-                'state_dict': model.state_dict(),
-                'acc': test_acc,
-                'best_acc': best_acc,
-                'optimizer': optimizer.state_dict(),
-                'lr': state['lr']
-            }, is_best, checkpoint=ckp_dir)
+            
+            torch.save(model, filepath)
+
 
 
 
